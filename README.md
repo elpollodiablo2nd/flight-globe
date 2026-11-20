@@ -38,9 +38,10 @@ Upload `index.html` to any static host (Netlify Drop, Cloudflare Pages, S3, …)
 ## How it works
 
 - The globe is a hand-rolled **orthographic 3D projection** on a `<canvas>` — drag rotates yaw/pitch, wheel scales the radius. Airports are projected each frame; only the front hemisphere is drawn and clickable.
+- **Landmasses** (Natural Earth 110m coastline polygons) are filled on the globe with limb-clipping, loaded live like the route data; if unreachable, the graticule-only globe still works.
 - Routes are rendered as **slerp great-circle arcs** with an altitude bump proportional to distance, animated with marching dashes.
 - Connections are computed at runtime with a **BFS of depth 2** over the route graph (direct = depth 1, indirect = depth 2).
-- Data is loaded live in the browser from the public [OpenFlights](https://openflights.org/data.html) dataset (`airports.dat` + `routes.dat`) via jsDelivr, falling back to raw.githubusercontent.com. The top **1,200 airports by route count** (~15k routes) are rendered. If both are unreachable, a built-in offline sample (~80 hubs) keeps the globe usable and a banner says so.
+- Data is loaded live in the browser from the public [OpenFlights](https://openflights.org/data.html) dataset (`airports.dat` + `routes.dat`) and [Natural Earth](https://www.naturalearthdata.com/) 110m land polygons (`ne_110m_land.geojson`) via jsDelivr, falling back to raw.githubusercontent.com. The top **1,200 airports by route count** (~15k routes) are rendered. If both are unreachable, a built-in offline sample (~80 hubs) keeps the globe usable and a banner says so.
 - Styled with the **Mistral pixel UI** (Press Start 2P / VT323, rainbow gradient, chunky borders, CRT scanlines).
 
 ## Files
@@ -51,4 +52,5 @@ Upload `index.html` to any static host (Netlify Drop, Cloudflare Pages, S3, …)
 ## Credits
 
 - Route/airport data: [OpenFlights](https://openflights.org/data.html) (public domain)
+- Landmass polygons: [Natural Earth](https://www.naturalearthdata.com/) 110m land (public domain)
 - Live schedules, airlines and the reference map: [FlightConnections.com](https://www.flightconnections.com/)

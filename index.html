@@ -591,6 +591,10 @@ const DATA = {
     routes: [
         "https://cdn.jsdelivr.net/gh/jpatokal/openflights@master/data/routes.dat",
         "https://raw.githubusercontent.com/jpatokal/openflights/master/data/routes.dat"
+    ],
+    land: [
+        "https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_110m_land.geojson",
+        "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson"
     ]
 };
 
@@ -869,7 +873,27 @@ async function fetchFirst(urls, timeoutMs) {
     }
     throw lastErr;
 }
+function parseLand(text) {
+    const land = [];
+    try {
+        const gj = JSON.parse(text);
+        for (const f of gj.features || []) {
+            const g = f.geometry;
+            if (!g || !g.coordinates) continue;
+            const polys = g.type === "MultiPolygon" ? g.coordinates : [g.coordinates];
+            for (const poly of polys) {
+                const rings = (poly || []).filter(r => r && r.length >= 3);
+                if (rings.length) land.push(rings);
+            }
+        }
+    } catch (e) { return []; }
+    return land;
+}
 async function loadData() {
+    let land = [];
+    try {
+        land = parseLand(await fetchFirst(DATA.land, 25000));
+    } catch (e) { land = []; }
     try {
         const [aText, rText] = await Promise.all([
             fetchFirst(DATA.airports, 25000),
@@ -877,14 +901,15 @@ async function loadData() {
         ]);
         const amap = parseAirports(aText);
         const pairs = parseRoutes(rText, amap);
-        return { ds: buildDataset(amap, pairs), offline: false };
+        return { ds: buildDataset(amap, pairs), land, offline: false };
     } catch (e) {
-        return { ds: fallbackDataset(), offline: true };
+        return { ds: fallbackDataset(), land, offline: true };
     }
 }
 
 const state = {
     ds: null,
+    land: [],
     yaw: -2.09,
     pitch: 0.35,
     zoom: 1,
@@ -968,6 +993,37 @@ function label(text, x, y) {
     ctx.fillText(text, x, y);
 }
 
+function drawLand(cx, cy, R, yaw, pitch) {
+    const land = state.land;
+    if (!land || !land.length) return;
+    ctx.beginPath();
+    for (const poly of land) {
+        for (const ring of poly) {
+            let anyFront = false;
+            const pts = [];
+            for (let i = 0; i < ring.length; i++) {
+                let p = project(ring[i][0], ring[i][1], 0, cx, cy, R, yaw, pitch);
+                if (p.z > 0.02) anyFront = true;
+                else {
+                    const dx = p.x - cx, dy = p.y - cy;
+                    const len = Math.hypot(dx, dy) || 1;
+                    p = { x: cx + dx / len * R * 0.998, y: cy + dy / len * R * 0.998 };
+                }
+                pts.push(p);
+            }
+            if (!anyFront) continue;
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            ctx.closePath();
+        }
+    }
+    ctx.fillStyle = "rgba(255,216,0,0.10)";
+    ctx.fill("evenodd");
+    ctx.strokeStyle = "rgba(255,250,235,0.5)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+}
+
 function draw(now) {
     resize();
     const w = canvas.width, h = canvas.height;
@@ -992,6 +1048,8 @@ function draw(now) {
     ctx.beginPath();
     ctx.arc(cx, cy, R, 0, Math.PI * 2);
     ctx.fill();
+
+    drawLand(cx, cy, R, yaw, pitch);
 
     ctx.lineWidth = 1;
     for (let lat = -60; lat <= 60; lat += 30) {
@@ -1355,6 +1413,7 @@ async function init() {
     requestAnimationFrame(frame);
     const res = await loadData();
     state.ds = res.ds;
+    state.land = res.land || [];
     state.maxD = 1;
     for (const a of state.ds.list) if (a.d > state.maxD) state.maxD = a.d;
     ui.statAirports.textContent = state.ds.list.length.toLocaleString();
